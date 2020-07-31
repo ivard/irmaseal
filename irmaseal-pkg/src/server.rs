@@ -30,25 +30,31 @@ pub fn exec(m: &ArgMatches) {
 
     actix_web::HttpServer::new(move || {
         actix_web::App::new()
+            .wrap(
+                actix_cors::Cors::new()
+                    .allowed_methods(vec!["GET", "POST"])
+                    .allowed_header("Content-Type")
+                    .finish()
+            )
             .data(actix_web::web::JsonConfig::default().limit(1024 * 4096))
             .data(state.clone())
             .service(
                 actix_web::web::resource("/v1/parameters")
-                    .route(actix_web::web::get().to_async(handlers::parameters)),
+                    .route(actix_web::web::get().to(handlers::parameters)),
             )
             .service(
                 actix_web::web::resource("/v1/request")
-                    .route(actix_web::web::post().to_async(handlers::request)),
+                    .route(actix_web::web::post().to(handlers::request)),
             )
             .service(
                 actix_web::web::resource("/v1/request/{token}/{timestamp}")
-                    .route(actix_web::web::get().to_async(handlers::request_fetch)),
+                    .route(actix_web::web::get().to(handlers::request_fetch)),
             )
     })
     .bind(format!("{}:{}", host, port))
     .unwrap()
     .shutdown_timeout(1)
-    .start();
+    .run();
 
     system.run().unwrap();
 }

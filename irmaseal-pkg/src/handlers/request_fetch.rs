@@ -30,10 +30,10 @@ fn fetch_identity(
     Identity::new(timestamp, &disclosed.id, Some(&v)).ok()
 }
 
-pub fn request_fetch(
+pub async fn request_fetch(
     state: Data<AppState>,
     path: Path<(String, u64)>,
-) -> impl Future<Item = HttpResponse, Error = crate::Error> {
+) -> Result<HttpResponse, crate::Error> {
     let (token, timestamp) = path.into_inner();
 
     let AppState {
@@ -87,5 +87,5 @@ pub fn request_fetch(
             };
 
             Ok(HttpResponse::Ok().json(result))
-        })
+        }).wait()
 }

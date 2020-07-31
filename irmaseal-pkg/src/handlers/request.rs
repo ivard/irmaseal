@@ -7,10 +7,10 @@ use irma::request::*;
 
 use crate::server::AppState;
 
-pub fn request(
+pub async fn request(
     state: Data<AppState>,
     value: Json<KeyRequest>,
-) -> impl Future<Item = HttpResponse, Error = crate::Error> {
+) -> Result<HttpResponse, crate::Error> {
     let kr = value.into_inner();
     let a = kr.attribute;
 
@@ -28,11 +28,13 @@ pub fn request(
     let client = Client::new(state.irma_server_host.clone()).unwrap();
 
     client.request(&dr).then(move |sp| {
-        let sp = sp.or(Err(crate::Error::UpstreamError))?;
+        println!("{}", sp.unwrap_err());
+        /*let sp = sp.or(Err(crate::Error::UpstreamError))?;
 
         let qr = &serde_json::to_string(&sp.session_ptr).or(Err(crate::Error::Unexpected))?;
         let token: &str = (&sp.token).into();
 
-        Ok(HttpResponse::Ok().json(KeyChallenge { qr, token }))
-    })
+        Ok(HttpResponse::Ok().json(KeyChallenge { qr, token }))*/
+        Ok(HttpResponse::Ok().finish())
+    }).wait()
 }

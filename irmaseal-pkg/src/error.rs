@@ -4,7 +4,7 @@ use std::fmt::{Display, Formatter};
 
 /// Show the error as an HTTP response for Actix-web.
 impl ResponseError for Error {
-    fn render_response(&self) -> HttpResponse {
+    fn error_response(&self) -> HttpResponse {
         let body = json!({
             "error": true,
             "message": format!("{}", self),
