@@ -4,27 +4,26 @@ use rand::{CryptoRng, Rng};
 use crate::stream::*;
 use crate::*;
 
-//TODO: Function is re-exported, so find way to make it private or pub(crate) somehow.
 /// Sealer for an bytestream, which converts it into an IRMAseal encrypted bytestream.
-pub struct Sealer<'a, W: Writable, S: SymCrypt> {
-    aes: S,
+pub struct Sealer<'a, W: Writable> {
+    aes: SymCrypt,
     hmac: Verifier,
     w: &'a mut W,
 }
 
-impl<'a, W: Writable, S: SymCrypt> Sealer<'a, W, S> {
-    pub fn new<R: Rng + CryptoRng>(
+impl<'a, W: Writable> Sealer<'a, W> {
+    pub async fn new<R: Rng + CryptoRng>(
         i: &Identity,
         pk: &PublicKey,
         rng: &mut R,
         w: &'a mut W,
-    ) -> Result<Sealer<'a, W, S>, Error> {
+    ) -> Result<Sealer<'a, W>, Error> {
         let (c, k) = ibe::kiltz_vahlis_one::encrypt(&pk.0, &i.derive(), rng);
 
         let (aeskey, mackey) = crate::stream::util::derive_keys(&k);
         let iv = crate::stream::util::generate_iv(rng);
 
-        let aes = S::new(&aeskey.into(), &iv.into());
+        let aes = SymCrypt::new(&aeskey.into(), &iv.into()).await;
         let mut hmac = Verifier::new_varkey(&mackey).unwrap();
 
         let ciphertext = c.to_bytes();
@@ -55,7 +54,7 @@ impl Writable for Verifier {
     }
 }
 
-impl<'a, W: Writable, S: SymCrypt> Writable for Sealer<'a, W, S> {
+impl<'a, W: Writable> Writable for Sealer<'a, W> {
     fn write(&mut self, buf: &[u8]) -> Result<(), Error> {
         let mut tmp = [0u8; BLOCKSIZE];
 
@@ -71,7 +70,7 @@ impl<'a, W: Writable, S: SymCrypt> Writable for Sealer<'a, W, S> {
     }
 }
 
-impl<'a, W: Writable, S: SymCrypt> Drop for Sealer<'a, W, S> {
+impl<'a, W: Writable> Drop for Sealer<'a, W> {
     fn drop(&mut self) {
         let code = self.hmac.result_reset().code();
         self.w.write(&code).unwrap()

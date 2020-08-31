@@ -13,12 +13,11 @@ pub struct OpenerSealed<R: Readable> {
     ar: ArchiveReader<R, [u8; 2048]>,
 }
 
-//TODO: Function is re-exported, so find way to make it private or pub(crate) somehow.
 /// Second stage opener of an IRMAseal encrypted bytestream.
 ///
 /// **Warning**: will only validate the authenticity of the plaintext when calling `validate`.
-pub struct OpenerUnsealed<R: Readable, S: SymCrypt> {
-    aes: S,
+pub struct OpenerUnsealed<R: Readable> {
+    aes: SymCrypt,
     hmac: Verifier,
     r: R,
     resultbuf: Option<[u8; BLOCKSIZE]>,
@@ -47,7 +46,7 @@ impl<R: Readable> OpenerSealed<R> {
     }
 
     /// Will unseal the stream continuation and yield a plaintext bytestream.
-    pub fn unseal<S: SymCrypt>(mut self, usk: &UserSecretKey) -> Result<OpenerUnsealed<R, S>, Error> {
+    pub async fn unseal(mut self, usk: &UserSecretKey) -> Result<OpenerUnsealed<R>, Error> {
         const CIPHERTEXT_SIZE: usize = 144;
 
         let cbuf = self.ar.read_bytes_strict(CIPHERTEXT_SIZE)?;
@@ -70,7 +69,7 @@ impl<R: Readable> OpenerSealed<R> {
         let iv: &[u8; IVSIZE] = array_ref![&iv, 0, IVSIZE];
         hmac.input(iv);
 
-        let aes = S::new(&skey.into(), &(*iv).into());
+        let aes = SymCrypt::new(&skey.into(), &(*iv).into()).await;
 
         Ok(OpenerUnsealed {
             aes,
@@ -81,7 +80,7 @@ impl<R: Readable> OpenerSealed<R> {
     }
 }
 
-impl<R: Readable, S: SymCrypt> OpenerUnsealed<R, S> {
+impl<R: Readable> OpenerUnsealed<R> {
     /// Read up to `BLOCKSIZE` bytes at a time.
     pub fn read(&mut self) -> Result<&[u8], Error> {
         let (resultsize, macbuf) = match self.resultbuf.as_mut() {
