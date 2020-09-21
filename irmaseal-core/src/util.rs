@@ -1,5 +1,6 @@
 use crate::*;
 use arrayvec::{Array, ArrayVec};
+use std::vec::Vec;
 
 pub struct SliceReader<'a, T> {
     buf: &'a [T],
@@ -60,6 +61,20 @@ impl<A: Array<Item = u8>> Writable for ArrayVec<A> {
         Ok(())
     }
 }
+
+impl Writable for Vec<u8> {
+    fn write(&mut self, data: &[u8]) -> Result<(), Error> {
+        self.extend(data);
+        Ok(())
+    }
+}
+
+/*impl Writable for VecDeque<u8> {
+    fn write(&mut self, data: &[u8]) -> Result<(), Error> {
+        self.extend(data);
+        Ok(())
+    }
+}*/
 
 pub(crate) fn open_ct<T>(x: subtle::CtOption<T>) -> Option<T> {
     if bool::from(x.is_some()) {
