@@ -1,4 +1,3 @@
-use ctr::stream_cipher::{NewStreamCipher, StreamCipher};
 use hmac::Mac;
 use rand::{CryptoRng, Rng};
 
@@ -13,7 +12,7 @@ pub struct Sealer<'a, W: Writable> {
 }
 
 impl<'a, W: Writable> Sealer<'a, W> {
-    pub fn new<R: Rng + CryptoRng>(
+    pub async fn new<R: Rng + CryptoRng>(
         i: &Identity,
         pk: &PublicKey,
         rng: &mut R,
@@ -24,7 +23,7 @@ impl<'a, W: Writable> Sealer<'a, W> {
         let (aeskey, mackey) = crate::stream::util::derive_keys(&k);
         let iv = crate::stream::util::generate_iv(rng);
 
-        let aes = SymCrypt::new(&aeskey.into(), &iv.into());
+        let aes = SymCrypt::new(&aeskey.into(), &iv.into()).await;
         let mut hmac = Verifier::new_varkey(&mackey).unwrap();
 
         let ciphertext = c.to_bytes();
@@ -62,7 +61,7 @@ impl<'a, W: Writable> Writable for Sealer<'a, W> {
         for c in buf.chunks(BLOCKSIZE) {
             let subtmp = &mut tmp[0..c.len()];
             subtmp.copy_from_slice(c);
-            self.aes.encrypt(subtmp);
+            self.aes.encrypt(subtmp).await;
             self.hmac.input(subtmp);
             self.w.write(subtmp)?;
         }

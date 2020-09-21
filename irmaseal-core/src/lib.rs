@@ -1,4 +1,5 @@
-#![no_std]
+// TODO: Check how to enable no_std in combination with support for futures and async/await.
+//#![no_std]
 
 mod artifacts;
 mod identity;

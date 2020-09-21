@@ -29,20 +29,20 @@ impl Default for DefaultProps {
     }
 }
 
-fn seal(props: &DefaultProps, content: &[u8]) -> BigBuf {
+async fn seal(props: &DefaultProps, content: &[u8]) -> BigBuf {
     let mut rng = rand::thread_rng();
     let DefaultProps { i, pk, sk: _ } = props;
 
     let mut buf = BigBuf::new();
     {
-        let mut s = Sealer::new(&i, &PublicKey(pk.clone()), &mut rng, &mut buf).unwrap();
+        let mut s = Sealer::new(&i, &PublicKey(pk.clone()), &mut rng, &mut buf).await.unwrap();
         s.write(&content).unwrap();
     } // Force Drop of s.
 
     buf
 }
 
-fn unseal(props: &DefaultProps, buf: &[u8]) -> (BigBuf, bool) {
+async fn unseal(props: &DefaultProps, buf: &[u8]) -> (BigBuf, bool) {
     let mut rng = rand::thread_rng();
     let DefaultProps { i, pk, sk } = props;
 
@@ -53,22 +53,22 @@ fn unseal(props: &DefaultProps, buf: &[u8]) -> (BigBuf, bool) {
 
     let usk = ibe::kiltz_vahlis_one::extract_usk(&pk, &sk, &i2.derive(), &mut rng);
 
-    let mut o = o.unseal(&UserSecretKey(usk)).unwrap();
+    let mut o = o.unseal(&UserSecretKey(usk)).await.unwrap();
 
     let mut dst = BigBuf::new();
-    o.write_to(&mut dst).unwrap();
+    o.write_to(&mut dst).await.unwrap();
 
     (dst, o.validate())
 }
 
-fn seal_and_unseal(props: &DefaultProps, content: &[u8]) -> (BigBuf, bool) {
-    let buf = seal(props, content);
-    unseal(props, &buf)
+async fn seal_and_unseal(props: &DefaultProps, content: &[u8]) -> (BigBuf, bool) {
+    let buf = seal(props, content).await;
+    unseal(props, &buf).await
 }
 
-fn do_test(props: &DefaultProps, content: &mut [u8]) {
+async fn do_test(props: &DefaultProps, content: &mut [u8]) {
     rand::thread_rng().fill_bytes(content);
-    let (dst, valid) = seal_and_unseal(props, content);
+    let (dst, valid) = seal_and_unseal(props, content).await;
 
     assert_eq!(&content.as_ref(), &dst.as_slice());
     assert!(valid);
@@ -88,31 +88,31 @@ fn reflection_sealer_opener() {
 }
 
 #[test]
-fn corrupt_body() {
+async fn corrupt_body() {
     let props = DefaultProps::default();
 
     let mut content = [0u8; 60000];
     rand::thread_rng().fill_bytes(&mut content);
 
-    let mut buf = seal(&props, &content);
+    let mut buf = seal(&props, &content).await;
     buf[1000] += 0x02;
-    let (dst, valid) = unseal(&props, &buf);
+    let (dst, valid) = unseal(&props, &buf).await;
 
     assert_ne!(&content.as_ref(), &dst.as_slice());
     assert!(!valid);
 }
 
 #[test]
-fn corrupt_hmac() {
+async fn corrupt_hmac() {
     let props = DefaultProps::default();
 
     let mut content = [0u8; 60000];
     rand::thread_rng().fill_bytes(&mut content);
 
-    let mut buf = seal(&props, &content);
+    let mut buf = seal(&props, &content).await;
     let mutation_point = buf.len() - 5;
     buf[mutation_point] += 0x02;
-    let (dst, valid) = unseal(&props, &buf);
+    let (dst, valid) = unseal(&props, &buf).await;
 
     assert_eq!(&content.as_ref(), &dst.as_slice());
     assert!(!valid);

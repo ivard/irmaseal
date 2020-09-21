@@ -3,7 +3,6 @@ use crate::stream::*;
 use crate::*;
 
 use arrayref::array_ref;
-use ctr::stream_cipher::{NewStreamCipher, StreamCipher};
 use hmac::Mac;
 
 /// First stage opener of an IRMAseal encrypted bytestream.
@@ -47,7 +46,7 @@ impl<R: Readable> OpenerSealed<R> {
     }
 
     /// Will unseal the stream continuation and yield a plaintext bytestream.
-    pub fn unseal(mut self, usk: &UserSecretKey) -> Result<OpenerUnsealed<R>, Error> {
+    pub async fn unseal(mut self, usk: &UserSecretKey) -> Result<OpenerUnsealed<R>, Error> {
         const CIPHERTEXT_SIZE: usize = 144;
 
         let cbuf = self.ar.read_bytes_strict(CIPHERTEXT_SIZE)?;
@@ -70,7 +69,7 @@ impl<R: Readable> OpenerSealed<R> {
         let iv: &[u8; IVSIZE] = array_ref![&iv, 0, IVSIZE];
         hmac.input(iv);
 
-        let aes = SymCrypt::new(&skey.into(), &(*iv).into());
+        let aes = SymCrypt::new(&skey.into(), &(*iv).into()).await;
 
         Ok(OpenerUnsealed {
             aes,
@@ -83,7 +82,7 @@ impl<R: Readable> OpenerSealed<R> {
 
 impl<R: Readable> OpenerUnsealed<R> {
     /// Read up to `BLOCKSIZE` bytes at a time.
-    pub fn read(&mut self) -> Result<&[u8], Error> {
+    pub async fn read(&mut self) -> Result<&[u8], Error> {
         let (resultsize, macbuf) = match self.resultbuf.as_mut() {
             None => (BLOCKSIZE, None),
             Some(dst) => {
@@ -116,7 +115,7 @@ impl<R: Readable> OpenerUnsealed<R> {
 
         let mut content = &mut dst[dststart..BLOCKSIZE - MACSIZE];
         self.hmac.input(content);
-        self.aes.decrypt(&mut content);
+        self.aes.decrypt(&mut content).await;
 
         Ok(content)
     }
@@ -135,9 +134,9 @@ impl<R: Readable> OpenerUnsealed<R> {
     }
 
     /// Will block and write the entire stream to the argument writer.
-    pub fn write_to<W: Writable>(&mut self, w: &mut W) -> Result<(), Error> {
+    pub async fn write_to<W: Writable>(&mut self, w: &mut W) -> Result<(), Error> {
         loop {
-            match self.read() {
+            match self.read().await {
                 Ok(buf) => w.write(buf)?,
                 Err(Error::EndOfStream) => return Ok(()),
                 Err(e) => return Err(e),
